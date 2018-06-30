@@ -50,8 +50,9 @@ public class DrinkBot extends AbstractBot {
             }
         } catch (TelegramApiException e) {
             e.printStackTrace();
+            return "Er is iets misgegaan";
         }
-        return "Er is iets misgegaan";
+        return null;
     }
 
     private boolean userIsAuthorized(Integer userId) throws TelegramApiException {
@@ -99,7 +100,7 @@ public class DrinkBot extends AbstractBot {
     private String handleInit(Message message){
         String[] initStringArray = message.getText().split(" ");
         if(initStringArray.length < 5){
-            return "Ik snap niet wat je bedoelt";
+            return "Vul in: /init aantal merknaam volume prijs";
         }
         try {
             Long amount = Long.parseLong(initStringArray[1]);
@@ -110,12 +111,20 @@ public class DrinkBot extends AbstractBot {
             eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brandName, amount));
             return "" + amount + " blikken " + brandName + " toegevoegd.";
         } catch (NumberFormatException e){
-            return "Je hebt geen getal ingevuld.";
+            return "Vul in: /init aantal merknaam volume prijs";
         }
     }
 
     private String handleTurfOrHoeveel(Message message){
-        String[] turfStringArray = message.getText().split(" ");
+        String voor = null;
+        String[] turfStringArray;
+        if(message.getText().contains(" voor ")){
+            String[] voorSplit = message.getText().split(" voor ");
+            turfStringArray = voorSplit[0].split(" ");
+            voor = voorSplit[1];
+        } else {
+            turfStringArray = message.getText().split(" ");
+        }
         if(turfStringArray.length > 1){
             String brandName = turfStringArray[turfStringArray.length - 1];
             Brand brand = brandDao.getBrand(brandName.toLowerCase());
@@ -125,7 +134,7 @@ public class DrinkBot extends AbstractBot {
                         + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
             } else {
                 if(message.getText().startsWith("/turf")){
-                    return handleTurf(message.getFrom().getId(), brand.getBrandName());
+                    return handleTurf(message.getFrom().getId(), brand.getBrandName(), voor);
                 }
                 if(message.getText().startsWith("/hoeveel")){
                     return handleHoeveel(turfStringArray, brand);
@@ -139,8 +148,22 @@ public class DrinkBot extends AbstractBot {
         return "Ik snap niet wat je bedoelt.";
     }
 
-    private String handleTurf(Integer chatId, String brandName){
-        eventDao.addEvent(new Event(Integer.toString(chatId), brandName, -1L));
+    private String handleTurf(Integer chatId, String brandName, String voor){
+        String userId;
+        DrinkUser user;
+        if(voor != null){
+            user = userDao.getDrinkUsers().stream()
+                    .filter(dbUser -> dbUser.getFirstName().equalsIgnoreCase(voor.trim()))
+                    .findFirst().orElse(null);
+            if(user != null){
+                userId = user.getUserId();
+            } else {
+                return "Ik snap niet wie " + voor.trim() + " is.";
+            }
+        } else {
+            userId = Integer.toString(chatId);
+        }
+        eventDao.addEvent(new Event(userId, brandName, -1L));
         return "Ik heb een " + brandName + " voor je geturfd.";
     }
 
