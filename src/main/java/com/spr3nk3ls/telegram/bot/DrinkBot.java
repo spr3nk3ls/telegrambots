@@ -131,6 +131,10 @@ public class DrinkBot extends AbstractBot {
                     return handleHoeveel(turfStringArray, brand);
                 }
             }
+        } else {
+            if(message.getText().startsWith("/hoeveel")) {
+                return handleHoeveelZeroArgs();
+            }
         }
         return "Ik snap niet wat je bedoelt.";
     }
@@ -154,4 +158,13 @@ public class DrinkBot extends AbstractBot {
         return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brand.getBrandName());
     }
 
+    private String handleHoeveelZeroArgs(){
+        double totalAmountLeft = eventDao.getAllEvents().stream()
+                .mapToDouble(event -> event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitVolume())
+                .sum();
+        double totalPriceLeft = eventDao.getAllEvents().stream()
+                .mapToDouble(event -> event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitPrice())
+                .sum();
+        return String.format("Er is in totaal nog %.1f liter (%.2f euro) bier over", totalAmountLeft, totalPriceLeft);
+    }
 }
