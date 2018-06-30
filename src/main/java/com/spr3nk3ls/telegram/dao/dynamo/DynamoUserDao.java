@@ -1,15 +1,10 @@
 package com.spr3nk3ls.telegram.dao.dynamo;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIndexHashKey;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.spr3nk3ls.telegram.dao.UserDao;
 import com.spr3nk3ls.telegram.domain.DrinkUser;
-import com.spr3nk3ls.telegram.domain.Group;
 import com.spr3nk3ls.telegram.util.DynamoDBManager;
 
-import java.util.HashMap;
 import java.util.List;
 
 public class DynamoUserDao implements UserDao {
@@ -35,5 +30,10 @@ public class DynamoUserDao implements UserDao {
     @Override
     public void addDrinkUser(DrinkUser user){
         DynamoDBManager.mapper().save(user);
+    }
+
+    @Override
+    public DrinkUser getDrinkUser(String userId){
+        return DynamoDBManager.mapper().load(new DrinkUser(userId));
     }
 }

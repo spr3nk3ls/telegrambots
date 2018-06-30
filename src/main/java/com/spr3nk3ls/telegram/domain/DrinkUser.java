@@ -8,10 +8,12 @@ import java.util.List;
 @DynamoDBTable(tableName = "USER")
 public class DrinkUser implements Serializable {
 
+    public static final String GROUP_INDEX = "Group-Index";
+
     @DynamoDBHashKey
     private String userId;
 
-    @DynamoDBAttribute
+    @DynamoDBIndexHashKey(globalSecondaryIndexName = GROUP_INDEX)
     private String groupId;
 
     @DynamoDBAttribute
@@ -24,6 +26,10 @@ public class DrinkUser implements Serializable {
     private List<String> aliases;
 
     public DrinkUser(){
+    }
+
+    public DrinkUser(String userId){
+        this.userId = userId;
     }
 
     public DrinkUser(String userId, String groupId, String firstName){

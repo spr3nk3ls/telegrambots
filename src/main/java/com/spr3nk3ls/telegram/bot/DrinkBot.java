@@ -40,10 +40,8 @@ public class DrinkBot extends AbstractBot {
         }
         String groupId = getRegisteredGroupId();
         if(groupId != null) {
-            if(userDao.getDrinkUsers().stream()
-                    .filter(user -> user.getGroupId().equals(groupId))
-                    .map(DrinkUser::getUserId)
-                    .anyMatch(id -> id.equals(userId.toString()))){
+            DrinkUser dbUser = userDao.getDrinkUser(Long.toString(userId));
+            if(dbUser != null && dbUser.getGroupId().equals(groupId)){
                 return true;
             }
             ChatMember chatMember = getSender().execute(new GetChatMember().setChatId(groupId).setUserId(userId.intValue()));

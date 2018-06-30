@@ -8,4 +8,6 @@ public interface UserDao {
     List<DrinkUser> getDrinkUsers();
 
     void addDrinkUser(DrinkUser user);
+
+    DrinkUser getDrinkUser(String userId);
 }
