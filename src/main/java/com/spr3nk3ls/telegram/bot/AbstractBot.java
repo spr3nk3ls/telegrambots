@@ -4,8 +4,10 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
+import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.api.objects.Update;
+import org.telegram.telegrambots.api.objects.User;
 import org.telegram.telegrambots.bots.AbsSender;
 
 import java.io.*;
@@ -43,21 +45,21 @@ public abstract class AbstractBot implements RequestStreamHandler {
 	}
 
 	private void handleUpdate(Update update) throws Exception {
-		if (update.getMessage() == null) {
+		Message message = update.getMessage();
+		if (message == null) {
 			return;
 		}
 		String responseText;
-		if(update.getMessage().isGroupMessage()
-						&& update.getMessage().getNewChatMembers() != null
-						&& !update.getMessage().getNewChatMembers().isEmpty()
-						&& update.getMessage().getNewChatMembers().get(0).getUserName().equals("blikbierbot")){
-			responseText = handleGroupAdd(update.getMessage());
-		} else if(update.getMessage().isGroupMessage() || update.getMessage().isSuperGroupMessage()){
-			responseText = handleGroupResponse(update.getMessage());
+		if(isGroupAdd(message)){
+			responseText = handleGroupAdd(message);
+		} else if(message.isGroupMessage() || message.isSuperGroupMessage()){
+			responseText = handleGroupResponse(message);
 		} else {
-			responseText = handlePrivateResponse(update.getMessage());
+			responseText = handlePrivateResponse(message);
 		}
-		sendMessage(update.getMessage().getChatId(), responseText);
+		if(responseText != null) {
+			sendMessage(message.getChatId(), responseText);
+		}
 	}
 
 	protected void sendMessage(Long chatId, String responseText) {
@@ -72,6 +74,17 @@ public abstract class AbstractBot implements RequestStreamHandler {
 			System.err.println("Failed to send mesage: " + e);
 			throw new RuntimeException("Failed to send message!", e);
 		}
+	}
+
+	protected boolean isGroupAdd(Message message){
+		if(message.isGroupMessage()
+						&& message.getNewChatMembers() != null
+						&& !message.getNewChatMembers().isEmpty()
+						&& message.getNewChatMembers().stream().map(User::getUserName).anyMatch(x -> x.equals("blikbierbot"))){
+			return true;
+		}
+		//TODO add channel chat created
+    return false;
 	}
 
 	protected abstract String handleGroupAdd(Message message);

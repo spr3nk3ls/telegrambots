@@ -59,8 +59,13 @@ public class DrinkBot extends AbstractBot {
     protected String handleGroupAdd(Message message){
         if(getRegisteredGroupId() == null) {
             groupIdDao.addGroup(new Group(message.getChatId().toString()));
+            return "Hallo allemaal!";
+        } else if (getRegisteredGroupId().equals(message.getChatId().toString())){
+            return "Daar ben ik weer!";
         }
-        return "Hallo allemaal!";
+        //TODO leave group
+        sendMessage(message.getChatId(), "Ik zit al in een andere groep.");
+        return null;
     }
 
     private String getRegisteredGroupId() {
