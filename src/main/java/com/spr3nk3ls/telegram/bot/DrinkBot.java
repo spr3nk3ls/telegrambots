@@ -81,7 +81,6 @@ public class DrinkBot extends AbstractBot {
             ChatMember chatMember = getSender().execute(new GetChatMember().setChatId(groupId).setUserId(userId.intValue()));
             if (chatMember != null) {
                 userDao.addDrinkUser(new DrinkUser(chatMember.getUser().getId().toString(), groupId, chatMember.getUser().getFirstName()));
-                //TODO give feedback that new user was added
                 sendMessage(Long.parseLong(groupId), "Ik heb " + chatMember.getUser().getFirstName() + " aan de turflijst toegevoegd. Welkom!");
                 return true;
             }
@@ -252,7 +251,6 @@ public class DrinkBot extends AbstractBot {
                 .filter(event -> event.getAmount() < 0)
                 .mapToLong(event -> -event.getAmount())
                 .sum();
-        //TODO positive negative sum.
         return String.format("Je hebt %d %s %s gehad.", totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
     }
 
