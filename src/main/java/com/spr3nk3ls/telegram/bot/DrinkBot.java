@@ -17,6 +17,8 @@ import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,15 +31,15 @@ public class DrinkBot extends AbstractBot {
 
     @Override
     protected String handlePrivateResponse(Message message) {
-        return handleResponse(message, false);
+        return handleResponse(message);
     }
 
     @Override
     protected String handleGroupResponse(Message message) {
-        return handleResponse(message, true);
+        return handleResponse(message);
     }
 
-    private String handleResponse(Message message, boolean groupMessage){
+    private String handleResponse(Message message){
         try {
             if(userIsAuthorized(message.getFrom().getId())){
                 if(message.getText().startsWith("/turf") || message.getText().startsWith("/hoeveel")){
@@ -48,6 +50,12 @@ public class DrinkBot extends AbstractBot {
                 }
                 if(message.getText().startsWith("/verbruik")){
                     return handleVerbruik(message);
+                }
+                if(message.getText().startsWith("/hoofdpijn")){
+                    return handleHoofdpijn(message);
+                }
+                if(message.getText().startsWith("/telling")){
+                    //TODO add table with telling
                 }
             } else {
                 return "Ik ken jou niet.";
@@ -74,6 +82,7 @@ public class DrinkBot extends AbstractBot {
             if (chatMember != null) {
                 userDao.addDrinkUser(new DrinkUser(chatMember.getUser().getId().toString(), groupId, chatMember.getUser().getFirstName()));
                 //TODO give feedback that new user was added
+                sendMessage(Long.parseLong(groupId), "Ik heb " + chatMember.getUser().getFirstName() + " aan de turflijst toegevoegd. Welkom!");
                 return true;
             }
         }
@@ -131,7 +140,7 @@ public class DrinkBot extends AbstractBot {
         }
         if(turfStringArray.length > 1){
             String brandName = turfStringArray[turfStringArray.length - 1];
-            Brand brand = brandDao.getBrand(brandName.toLowerCase());
+            Brand brand = getBrandFromUserInput(brandName);
             if(brand == null){
                 return "We hebben geen " + brandName + ".\n"
                         + "We hebben wel: "
@@ -146,7 +155,7 @@ public class DrinkBot extends AbstractBot {
             }
         } else {
             if(message.getText().startsWith("/hoeveel")) {
-                return handleHoeveelZeroArgs();
+                return handleReport();
             }
         }
         return "Ik snap niet wat je bedoelt.";
@@ -176,10 +185,7 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleHoeveel(String[] turfStringArray, Brand brand){
-        int amountLeft = eventDao.getAllEvents().stream()
-                .filter(event -> event.getBrandName().equalsIgnoreCase(brand.getBrandName()))
-                .mapToInt(event -> event.getAmount().intValue())
-                .sum();
+        int amountLeft = getAmountLeftForBrand(brand);
         if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
             return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brand.getBrandName());
         }
@@ -189,41 +195,87 @@ public class DrinkBot extends AbstractBot {
         return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brand.getBrandName());
     }
 
-    private String handleHoeveelZeroArgs(){
+    private String handleReport(){
+        List<String> reportList = new ArrayList<>();
+        reportList.add("Dit is er nog over:");
+        for(Brand brand : brandDao.getAllBrands()){
+            reportList.add(String.format("%d %s", getAmountLeftForBrand(brand), brand.getBrandName()));
+        }
+        reportList.add(getLitersAndEuros());
+        return String.join("\n", reportList);
+    }
+
+    private Integer getAmountLeftForBrand(Brand brand){
+        return eventDao.getAllEvents().stream()
+                .filter(event -> event.getBrandName().equalsIgnoreCase(brand.getBrandName()))
+                .mapToInt(event -> event.getAmount().intValue())
+                .sum();
+    }
+
+    private String getLitersAndEuros(){
         double totalAmountLeft = eventDao.getAllEvents().stream()
                 .mapToDouble(event -> event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitVolume())
                 .sum();
         double totalPriceLeft = eventDao.getAllEvents().stream()
                 .mapToDouble(event -> event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitPrice())
                 .sum();
-        return String.format("Er is in totaal nog %.1f liter (%.2f euro) bier over", totalAmountLeft, totalPriceLeft);
+        return String.format("Er is in totaal nog %.1f liter (%.2f euro) bier over.", totalAmountLeft, totalPriceLeft);
     }
 
     private String handleVerbruik(Message message){
         String[] verbruikArray = message.getText().split(" ");
         if(verbruikArray.length == 1){
-//            return totalVerbruik();
+            List<String> brandArray = new ArrayList<>();
+            for(Brand brand : brandDao.getAllBrands()){
+                brandArray.add(getVerbruikForBrand(message, brand.getBrandName()));
+            }
+            return String.join("\n", brandArray);
         }
         if(verbruikArray.length == 2){
-            String brand = brandDao.getAllBrands().stream()
-                    .map(dbBrand -> dbBrand.getBrandName())
-                    .filter(name -> name.equalsIgnoreCase(verbruikArray[1].trim()))
-                    .findFirst().orElse(null);
+            Brand brand = getBrandFromUserInput(verbruikArray[1]);
             if(brand == null){
-                return "We hebben geen " + verbruikArray[1].trim() + ".\n"
+                return "We hebben geen " + verbruikArray[1] + ".\n"
                         + "We hebben wel: "
                         + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
             } else {
-                Long totalAmount = eventDao.getAllEvents().stream()
-                        .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
-                        .filter(event -> event.getBrandName().equals(brand))
-                        .mapToLong(event -> event.getAmount())
-                        .sum();
-                //TODO positive negative sum.
-                return String.format("Je hebt %d %s %s gedronken.", totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
+                return getVerbruikForBrand(message, brand.getBrandName());
             }
         }
         //TODO
         return "Ik snap het niet.";
+    }
+
+    private String getVerbruikForBrand(Message message, String brand) {
+        Long totalAmount = eventDao.getAllEvents().stream()
+                .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
+                .filter(event -> event.getBrandName().equals(brand))
+                .filter(event -> event.getAmount() < 0)
+                .mapToLong(event -> -event.getAmount())
+                .sum();
+        //TODO positive negative sum.
+        return String.format("Je hebt %d %s %s gehad.", totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
+    }
+
+    private Brand getBrandFromUserInput(String brandName){
+        return brandDao.getAllBrands().stream()
+                .filter(brand -> brand.getBrandName().equalsIgnoreCase(brandName.trim()))
+                .findFirst().orElse(null);
+    }
+
+    private String handleHoofdpijn(Message message){
+        Calendar fourOClockToday = Calendar.getInstance();
+        fourOClockToday.set(Calendar.HOUR_OF_DAY, 4);
+        Calendar fourOClockYesterday = (Calendar)fourOClockToday.clone();
+        fourOClockYesterday.add(Calendar.DAY_OF_YEAR, -1);
+        System.out.println("yesterday: " + fourOClockYesterday.getTimeInMillis());
+        System.out.println("today: " + fourOClockToday.getTimeInMillis());
+        Double tooMuchToDrink = eventDao.getAllEvents().stream()
+                .filter(event -> event.getTimestamp() > fourOClockYesterday.getTimeInMillis())
+                .filter(event -> event.getTimestamp() < fourOClockToday.getTimeInMillis())
+                .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
+                .filter(event -> event.getAmount() < 0)
+                .mapToDouble(event -> -event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitVolume())
+                .sum();
+        return String.format("Je hebt gisteren %.1f liter bier gedronken.", tooMuchToDrink);
     }
 }
