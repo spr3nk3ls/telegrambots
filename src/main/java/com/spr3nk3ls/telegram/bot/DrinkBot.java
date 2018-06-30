@@ -131,7 +131,7 @@ public class DrinkBot extends AbstractBot {
       //TODO merge with turf
         String[] turfStringArray = message.getText().split(" ");
         if(turfStringArray.length > 1){
-            String brandName = turfStringArray[1];
+            String brandName = turfStringArray[turfStringArray.length - 1];
             Brand brand = brandDao.getBrand(brandName);
             if(brand == null){
                 return "We hebben geen " + brandName;
@@ -140,8 +140,13 @@ public class DrinkBot extends AbstractBot {
                         .filter(event -> event.getBrandName().equals(brandName))
                         .mapToInt(event -> event.getAmount().intValue())
                         .sum();
-                //TODO is/zijn
-                return "Er zijn nog " + amountLeft + " blikken " + brandName + " over.";
+                if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
+                    return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brandName);
+                }
+                if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("euro")){
+                    return String.format("Er is nog %.2f euro %s over.", amountLeft*brand.getUnitPrice(), brandName);
+                }
+                return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brandName);
             }
         } else {
             return "Ik snap niet wat je bedoelt.";
