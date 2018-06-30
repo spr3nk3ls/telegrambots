@@ -17,6 +17,8 @@ import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 
+import java.util.stream.Collectors;
+
 public class DrinkBot extends AbstractBot {
 
     UserDao userDao = DynamoUserDao.instance();
@@ -26,16 +28,22 @@ public class DrinkBot extends AbstractBot {
 
     @Override
     protected String handlePrivateResponse(Message message) {
+        return handleResponse(message, false);
+    }
+
+    @Override
+    protected String handleGroupResponse(Message message) {
+        return handleResponse(message, true);
+    }
+
+    private String handleResponse(Message message, boolean groupMessage){
         try {
-            if(userIsAuthorized(message.getChatId())){
-                if(message.getText().startsWith("/turf")){
-                   return handleTurf(message);
+            if(userIsAuthorized(message.getFrom().getId())){
+                if(message.getText().startsWith("/turf") || message.getText().startsWith("/hoeveel")){
+                    return handleTurfOrHoeveel(message);
                 }
                 if(message.getText().startsWith("/init")){
                     return handleInit(message);
-                }
-                if(message.getText().startsWith("/hoeveel")){
-                    return handleHoeveel(message);
                 }
             } else {
                 return "Ik ken jou niet.";
@@ -46,19 +54,14 @@ public class DrinkBot extends AbstractBot {
         return "Er is iets misgegaan";
     }
 
-    @Override
-    protected String handleGroupResponse(Message message) {
-        return null;
-    }
-
-    private boolean userIsAuthorized(Long userId) throws TelegramApiException {
+    private boolean userIsAuthorized(Integer userId) throws TelegramApiException {
         if(userId == null){
-            System.out.println("Chat id is null.");
+            System.out.println("User id is null.");
             return false;
         }
         String groupId = getRegisteredGroupId();
         if(groupId != null) {
-            DrinkUser dbUser = userDao.getDrinkUser(Long.toString(userId));
+            DrinkUser dbUser = userDao.getDrinkUser(Integer.toString(userId));
             if(dbUser != null && dbUser.getGroupId().equals(groupId)){
                 return true;
             }
@@ -93,23 +96,7 @@ public class DrinkBot extends AbstractBot {
                 .orElse(null);
     }
 
-    protected String handleTurf(Message message){
-        String[] turfStringArray = message.getText().split(" ");
-        if(turfStringArray.length > 1){
-            String brandName = turfStringArray[1];
-            Brand brand = brandDao.getBrand(brandName);
-            if(brand == null){
-                return "We hebben geen " + brandName;
-            } else {
-                eventDao.addEvent(new Event(Long.toString(message.getChatId()), brandName, -1L));
-                return "Ik heb een " + brandName + " voor je geturfd.";
-            }
-        } else {
-            return "Ik snap niet wat je bedoelt.";
-        }
-    }
-
-    protected String handleInit(Message message){
+    private String handleInit(Message message){
         String[] initStringArray = message.getText().split(" ");
         if(initStringArray.length < 5){
             return "Ik snap niet wat je bedoelt";
@@ -120,37 +107,51 @@ public class DrinkBot extends AbstractBot {
             Double volume = Double.parseDouble(initStringArray[3]);
             Double price = Double.parseDouble(initStringArray[4]);
             brandDao.addBrand(new Brand(brandName, volume, price));
-            eventDao.addEvent(new Event(Long.toString(message.getChatId()), brandName, amount));
+            eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brandName, amount));
             return "" + amount + " blikken " + brandName + " toegevoegd.";
         } catch (NumberFormatException e){
             return "Je hebt geen getal ingevuld.";
         }
     }
 
-    protected String handleHoeveel(Message message){
-      //TODO merge with turf
+    private String handleTurfOrHoeveel(Message message){
         String[] turfStringArray = message.getText().split(" ");
         if(turfStringArray.length > 1){
             String brandName = turfStringArray[turfStringArray.length - 1];
-            Brand brand = brandDao.getBrand(brandName);
+            Brand brand = brandDao.getBrand(brandName.toLowerCase());
             if(brand == null){
-                return "We hebben geen " + brandName;
+                return "We hebben geen " + brandName + ".\n"
+                        + "We hebben wel: "
+                        + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
             } else {
-                int amountLeft = eventDao.getAllEvents().stream()
-                        .filter(event -> event.getBrandName().equals(brandName))
-                        .mapToInt(event -> event.getAmount().intValue())
-                        .sum();
-                if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
-                    return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brandName);
+                if(message.getText().startsWith("/turf")){
+                    return handleTurf(message.getFrom().getId(), brand.getBrandName());
                 }
-                if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("euro")){
-                    return String.format("Er is nog %.2f euro %s over.", amountLeft*brand.getUnitPrice(), brandName);
+                if(message.getText().startsWith("/hoeveel")){
+                    return handleHoeveel(turfStringArray, brand);
                 }
-                return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brandName);
             }
-        } else {
-            return "Ik snap niet wat je bedoelt.";
         }
+        return "Ik snap niet wat je bedoelt.";
+    }
+
+    private String handleTurf(Integer chatId, String brandName){
+        eventDao.addEvent(new Event(Integer.toString(chatId), brandName, -1L));
+        return "Ik heb een " + brandName + " voor je geturfd.";
+    }
+
+    private String handleHoeveel(String[] turfStringArray, Brand brand){
+        int amountLeft = eventDao.getAllEvents().stream()
+                .filter(event -> event.getBrandName().equalsIgnoreCase(brand.getBrandName()))
+                .mapToInt(event -> event.getAmount().intValue())
+                .sum();
+        if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
+            return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brand.getBrandName());
+        }
+        if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("euro")){
+            return String.format("Er is nog %.2f euro %s over.", amountLeft*brand.getUnitPrice(), brand.getBrandName());
+        }
+        return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brand.getBrandName());
     }
 
 }
