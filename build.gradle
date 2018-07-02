@@ -26,10 +26,12 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
-task writeVersion() << {
-    def file = new File("$projectDir/src/main/resources/version")
-    file.createNewFile()
-    file.text = "${version}"
+task writeVersion() {
+	doLast {	
+		def file = new File("$projectDir/src/main/resources/version")
+		file.createNewFile()
+		file.text = "${version}"
+	}
 }
 processResources.dependsOn writeVersion
 
