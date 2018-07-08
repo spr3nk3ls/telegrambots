@@ -7,7 +7,7 @@ plugins {
     id 'jp.classmethod.aws.lambda' version '0.35'
 }
 
-group 'com.vsubhuman'
+group 'com.spr3nk3ls'
 version '1.0-SNAPSHOT'
 
 sourceCompatibility = 1.8

@@ -172,9 +172,7 @@ public class DrinkBot extends AbstractBot {
             String brandName = turfStringArray[turfStringArray.length - 1];
             Brand brand = getBrandFromUserInput(brandName);
             if(brand == null){
-                return "We hebben geen " + brandName + ".\n"
-                        + "We hebben wel: "
-                        + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
+                return weHaveNoMessage(brandName);
             } else {
                 if(message.getText().startsWith("/turf")){
                     if(brand.isDepleted() != null && brand.isDepleted()){
@@ -281,9 +279,7 @@ public class DrinkBot extends AbstractBot {
         if(verbruikArray.length == 2){
             Brand brand = getBrandFromUserInput(verbruikArray[1]);
             if(brand == null){
-                return "We hebben geen " + verbruikArray[1] + ".\n"
-                        + "We hebben wel: "
-                        + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
+                return weHaveNoMessage(verbruikArray[1]);
             } else {
                 return getVerbruikForBrand(message, brand.getBrandName());
             }
@@ -340,6 +336,9 @@ public class DrinkBot extends AbstractBot {
         String[] info = message.getText().split(" ");
         if(info.length == 2) {
             Brand brand = getBrandFromUserInput(info[1]);
+            if(brand == null){
+                return weHaveNoMessage(info[1]);
+            }
             return "1 blik " + brand.getBrandName() + " kost " + brand.getUnitPrice() + " euro en bevat " + brand.getUnitVolume() + " bier.";
         } else {
             return "Gebruik: /info [biermerk].";
@@ -350,6 +349,9 @@ public class DrinkBot extends AbstractBot {
         String[] info = message.getText().split(" ");
         if(info.length == 2) {
             Brand brand = getBrandFromUserInput(info[1]);
+            if(brand == null){
+                return weHaveNoMessage(info[1]);
+            }
             String output;
             if(brand.isDepleted() != null && brand.isDepleted()){
                 brand.setDepleted(false);
@@ -363,5 +365,17 @@ public class DrinkBot extends AbstractBot {
         } else {
             return "Gebruik: /op [biermerk].";
         }
+    }
+
+    private String weHaveNoMessage(String beerWeDontHave){
+        List<Brand> allBrands = brandDao.getAllBrands();
+        String weDoHaveMessage;
+        if(allBrands.isEmpty()){
+            weDoHaveMessage = "We hebben helemaal geen bier.";
+        } else {
+            weDoHaveMessage = "We hebben wel: "
+                    + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
+        }
+        return "We hebben geen " + beerWeDontHave + ".\n" + weDoHaveMessage;
     }
 }
