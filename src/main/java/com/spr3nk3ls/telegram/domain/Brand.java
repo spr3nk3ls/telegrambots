@@ -16,6 +16,9 @@ public class Brand {
   @DynamoDBAttribute
   private Double unitPrice;
 
+  @DynamoDBAttribute
+  private Boolean depleted;
+
   public Brand(){
   }
 
@@ -27,6 +30,24 @@ public class Brand {
     this.brandName = brandName;
     this.unitVolume = unitVolume;
     this.unitPrice = unitPrice;
+  }
+
+  @Override
+  public boolean equals(Object aBrand){
+    if(!(aBrand instanceof Brand)){
+      return false;
+    }
+    Brand otherBrand = (Brand)aBrand;
+    if(!brandName.equalsIgnoreCase(otherBrand.brandName)){
+      return false;
+    }
+    if(!otherBrand.getUnitVolume().equals(unitVolume)){
+      return false;
+    }
+    if(!otherBrand.getUnitPrice().equals(unitPrice)){
+      return false;
+    }
+    return true;
   }
 
   public Double getUnitPrice() {
@@ -51,5 +72,13 @@ public class Brand {
 
   public void setUnitVolume(Double unitCost) {
     this.unitVolume = unitCost;
+  }
+
+  public Boolean isDepleted(){
+    return depleted;
+  }
+
+  public void setDepleted(Boolean depleted){
+    this.depleted = depleted;
   }
 }

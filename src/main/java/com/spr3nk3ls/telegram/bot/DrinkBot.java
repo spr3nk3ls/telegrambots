@@ -13,6 +13,7 @@ import com.spr3nk3ls.telegram.domain.DrinkUser;
 import com.spr3nk3ls.telegram.domain.Event;
 import com.spr3nk3ls.telegram.domain.Group;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
+import org.telegram.telegrambots.api.methods.groupadministration.LeaveChat;
 import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
@@ -24,10 +25,10 @@ import java.util.stream.Collectors;
 
 public class DrinkBot extends AbstractBot {
 
-    UserDao userDao = DynamoUserDao.instance();
-    GroupDao groupIdDao = DynamoGroupDao.instance();
-    EventDao eventDao = DynamoEventDao.instance();
-    BrandDao brandDao = DynamoBrandDao.instance();
+    private UserDao userDao = DynamoUserDao.instance();
+    private GroupDao groupIdDao = DynamoGroupDao.instance();
+    private EventDao eventDao = DynamoEventDao.instance();
+    private BrandDao brandDao = DynamoBrandDao.instance();
 
     @Override
     protected String handlePrivateResponse(Message message) {
@@ -42,6 +43,9 @@ public class DrinkBot extends AbstractBot {
     private String handleResponse(Message message){
         try {
             if(userIsAuthorized(message.getFrom().getId())){
+                if(message.getText() == null){
+                    return null;
+                }
                 if(message.getText().startsWith("/turf") || message.getText().startsWith("/hoeveel")){
                     return handleTurfOrHoeveel(message);
                 }
@@ -56,6 +60,15 @@ public class DrinkBot extends AbstractBot {
                 }
                 if(message.getText().startsWith("/telling")){
                     //TODO add table with telling
+                }
+                if(message.getText().startsWith("/help")){
+                    return handleHelp();
+                }
+                if(message.getText().startsWith("/info")){
+                    return handleInfo(message);
+                }
+                if(message.getText().startsWith("/op")){
+                    return handleOp(message);
                 }
             } else {
                 return "Ik ken jou niet.";
@@ -96,8 +109,12 @@ public class DrinkBot extends AbstractBot {
         } else if (getRegisteredGroupId().equals(message.getChatId().toString())){
             return "Daar ben ik weer!";
         }
-        //TODO leave group
-        sendMessage(message.getChatId(), "Ik zit al in een andere groep.");
+        sendMessage(message.getChatId(), "Ik zit al in een andere groep. Doei!");
+        try {
+            getSender().execute(new LeaveChat().setChatId(message.getChatId()));
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
@@ -111,19 +128,33 @@ public class DrinkBot extends AbstractBot {
 
     private String handleInit(Message message){
         String[] initStringArray = message.getText().split(" ");
-        if(initStringArray.length < 5){
-            return "Vul in: /init aantal merknaam volume prijs";
+        if(initStringArray.length != 5){
+            return "Vul in: /init aantal biermerk volume prijs";
         }
+        String brandName = initStringArray[2];
         try {
             Long amount = Long.parseLong(initStringArray[1]);
-            String brandName = initStringArray[2];
+            if(amount <= 0){
+                return "Het aantal moet een positief getal zijn.";
+            }
             Double volume = Double.parseDouble(initStringArray[3]);
+            if(amount <= 0){
+                return "De inhoud moet een positief getal zijn.";
+            }
             Double price = Double.parseDouble(initStringArray[4]);
-            brandDao.addBrand(new Brand(brandName, volume, price));
+            if(amount <= 0){
+                return "De prijs moet een positief getal zijn.";
+            }
+            Brand oldBrand = brandDao.getBrand(brandName);
+            Brand newBrand = new Brand(brandName, volume, price);
+            if(brandDao.getBrand(brandName) != null && !oldBrand.equals(newBrand)){
+                return "We hebben al een ander bier met de naam " + brandName;
+            }
+            brandDao.addBrand(newBrand);
             eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brandName, amount));
             return "" + amount + " blikken " + brandName + " toegevoegd.";
         } catch (NumberFormatException e){
-            return "Vul in: /init aantal merknaam volume prijs";
+            return "Vul in: /init aantal biermerk inhoud prijs. Aantal, volume en prijs moeten een getal zijn.";
         }
     }
 
@@ -146,7 +177,21 @@ public class DrinkBot extends AbstractBot {
                         + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
             } else {
                 if(message.getText().startsWith("/turf")){
-                    return handleTurf(message.getFrom().getId(), brand.getBrandName(), voor);
+                    if(brand.isDepleted() != null && brand.isDepleted()){
+                        return "De " + brandName + " is op.";
+                    }
+                    if(turfStringArray.length == 3){
+                        try {
+                            Long amount = Long.parseLong(turfStringArray[1]);
+                            if (amount <= 0) {
+                                return "Het aantal moet een positief getal zijn.";
+                            }
+                            return handleTurf(message.getFrom().getId(), brand.getBrandName(), voor, amount);
+                        } catch (NumberFormatException e){
+                            return "Het aantal moet een getal zijn.";
+                        }
+                    }
+                    return handleTurf(message.getFrom().getId(), brand.getBrandName(), voor, 1L);
                 }
                 if(message.getText().startsWith("/hoeveel")){
                     return handleHoeveel(turfStringArray, brand);
@@ -156,11 +201,14 @@ public class DrinkBot extends AbstractBot {
             if(message.getText().startsWith("/hoeveel")) {
                 return handleReport();
             }
+            if(message.getText().startsWith("/turf")) {
+                return "Welk bier wil je turven?";
+            }
         }
         return "Ik snap niet wat je bedoelt.";
     }
 
-    private String handleTurf(Integer chatId, String brandName, String voor){
+    private String handleTurf(Integer chatId, String brandName, String voor, Long amount){
         String userId;
         DrinkUser user;
         String userName = "je";
@@ -179,8 +227,8 @@ public class DrinkBot extends AbstractBot {
         } else {
             userId = Integer.toString(chatId);
         }
-        eventDao.addEvent(new Event(userId, brandName, -1L));
-        return "Ik heb een " + brandName + " voor " + userName + " geturfd.";
+        eventDao.addEvent(new Event(userId, brandName, -amount));
+        return "Ik heb " + (amount == 1 ? "een" : amount) + " " + brandName + " voor " + userName + " geturfd.";
     }
 
     private String handleHoeveel(String[] turfStringArray, Brand brand){
@@ -240,7 +288,6 @@ public class DrinkBot extends AbstractBot {
                 return getVerbruikForBrand(message, brand.getBrandName());
             }
         }
-        //TODO
         return "Ik snap het niet.";
     }
 
@@ -265,8 +312,6 @@ public class DrinkBot extends AbstractBot {
         fourOClockToday.set(Calendar.HOUR_OF_DAY, 4);
         Calendar fourOClockYesterday = (Calendar)fourOClockToday.clone();
         fourOClockYesterday.add(Calendar.DAY_OF_YEAR, -1);
-        System.out.println("yesterday: " + fourOClockYesterday.getTimeInMillis());
-        System.out.println("today: " + fourOClockToday.getTimeInMillis());
         Double tooMuchToDrink = eventDao.getAllEvents().stream()
                 .filter(event -> event.getTimestamp() > fourOClockYesterday.getTimeInMillis())
                 .filter(event -> event.getTimestamp() < fourOClockToday.getTimeInMillis())
@@ -275,5 +320,48 @@ public class DrinkBot extends AbstractBot {
                 .mapToDouble(event -> -event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitVolume())
                 .sum();
         return String.format("Je hebt gisteren %.1f liter bier gedronken.", tooMuchToDrink);
+    }
+
+    private String handleHelp(){
+        List<String> helpText = new ArrayList<>();
+        helpText.add("'/help' geeft een lijst met commando's");
+        helpText.add("'/turf [n] biermerk [voor persoon]' turft een (optioneel n) biertjes (optioneel voor persoon)");
+        helpText.add("/hoeveel' [eenheid] biermerk' "
+                + " print het aantal blikken (optioneel: eenheid euro of liter) bier dat over is.");
+        helpText.add("'/hoeveel' print het aantal liter/euro bier dat in totaal nog over is.");
+        helpText.add("'/verbruik [biermerk]' geeft de hoeveelheid bier (optioneel voor biermerk) die je gehad hebt.");
+        helpText.add("'/info biermerk' geeft de inhoud en prijs van een biertje.");
+        helpText.add("'/init aantal biermerk inhoud prijs' voegt nieuw bier toe.");
+        helpText.add("'/op biermerk' markeert dit bier als op in de biervoorraad. Je kunt hem vanaf dan niet meer turven.");
+        return String.join("\n", helpText);
+    }
+
+    private String handleInfo(Message message){
+        String[] info = message.getText().split(" ");
+        if(info.length == 2) {
+            Brand brand = getBrandFromUserInput(info[1]);
+            return "1 blik " + brand.getBrandName() + " kost " + brand.getUnitPrice() + " euro en bevat " + brand.getUnitVolume() + " bier.";
+        } else {
+            return "Gebruik: /info [biermerk].";
+        }
+    }
+
+    private String handleOp(Message message){
+        String[] info = message.getText().split(" ");
+        if(info.length == 2) {
+            Brand brand = getBrandFromUserInput(info[1]);
+            String output;
+            if(brand.isDepleted() != null && brand.isDepleted()){
+                brand.setDepleted(false);
+                output = brand.getBrandName() + " is nu niet meer op.";
+            } else {
+                brand.setDepleted(true);
+                output = brand.getBrandName() + " is nu op en kan niet meer geturfd worden.";
+            }
+            brandDao.addBrand(brand);
+            return output;
+        } else {
+            return "Gebruik: /op [biermerk].";
+        }
     }
 }

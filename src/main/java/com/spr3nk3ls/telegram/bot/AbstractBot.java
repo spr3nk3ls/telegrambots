@@ -8,6 +8,7 @@ import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.api.objects.User;
 import org.telegram.telegrambots.bots.AbsSender;
+import org.telegram.telegrambots.exceptions.TelegramApiException;
 
 import java.io.*;
 
@@ -77,12 +78,12 @@ public abstract class AbstractBot implements RequestStreamHandler {
 
 	protected boolean isGroupAdd(Message message){
 		if(message.isGroupMessage()
-						&& message.getNewChatMembers() != null
+						&& ((message.getGroupchatCreated() != null && message.getGroupchatCreated()) ||
+						(message.getNewChatMembers() != null
 						&& !message.getNewChatMembers().isEmpty()
-						&& message.getNewChatMembers().stream().map(User::getUserName).anyMatch(x -> x.equals("blikbierbot"))){
+						&& message.getNewChatMembers().stream().map(User::getUserName).anyMatch(x -> x.equals("blikbierbot"))))){
 			return true;
 		}
-		//TODO add channel chat created
     return false;
 	}
 
