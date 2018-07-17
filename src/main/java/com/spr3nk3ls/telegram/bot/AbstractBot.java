@@ -77,7 +77,7 @@ public abstract class AbstractBot implements RequestStreamHandler {
 	}
 
 	protected boolean isGroupAdd(Message message){
-		if(message.isGroupMessage()
+		if((message.isGroupMessage() || message.isSuperGroupMessage())
 						&& ((message.getGroupchatCreated() != null && message.getGroupchatCreated()) ||
 						(message.getNewChatMembers() != null
 						&& !message.getNewChatMembers().isEmpty()
