@@ -268,11 +268,32 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleVerbruik(Message message){
-        String[] verbruikArray = message.getText().split(" ");
+        String voor = null;
+        String[] verbruikArray;
+        DrinkUser oneUser = null;
+        if(message.getText().contains(" van ")){
+            String[] voorSplit = message.getText().split(" van ");
+            verbruikArray = voorSplit[0].split(" ");
+            voor = voorSplit[1];
+            final String userName = voor;
+            oneUser = userDao.getDrinkUsers().stream()
+                    .filter(dbUser -> dbUser.getFirstName().equalsIgnoreCase(userName))
+                    .findFirst().orElse(null);
+        } else {
+            verbruikArray = message.getText().split(" ");
+        }
         if(verbruikArray.length == 1){
             List<String> brandArray = new ArrayList<>();
             for(Brand brand : brandDao.getAllBrands()){
-                brandArray.add(getVerbruikForBrand(message, brand.getBrandName()));
+                if("iedereen".equals(voor)){
+                    for(DrinkUser user : userDao.getDrinkUsers()){
+                        brandArray.add(getVerbruikForBrandAndUser(user, brand.getBrandName()));
+                    }
+                } else if(oneUser != null){
+                    brandArray.add(getVerbruikForBrandAndUser(oneUser, brand.getBrandName()));
+                } else {
+                    brandArray.add(getVerbruikForBrand(message, brand.getBrandName()));
+                }
             }
             return String.join("\n", brandArray);
         }
@@ -295,6 +316,16 @@ public class DrinkBot extends AbstractBot {
                 .mapToLong(event -> -event.getAmount())
                 .sum();
         return String.format("Je hebt %d %s %s gehad.", totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
+    }
+
+    private String getVerbruikForBrandAndUser(DrinkUser user, String brand) {
+        Long totalAmount = eventDao.getAllEvents().stream()
+                .filter(event -> event.getDrinkerId().equals(user.getUserId()))
+                .filter(event -> event.getBrandName().equals(brand))
+                .filter(event -> event.getAmount() < 0)
+                .mapToLong(event -> -event.getAmount())
+                .sum();
+        return String.format("%s heeft %d %s %s gehad.", user.getFirstName(), totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
     }
 
     private Brand getBrandFromUserInput(String brandName){
@@ -326,6 +357,8 @@ public class DrinkBot extends AbstractBot {
                 + " print het aantal blikken (optioneel: eenheid euro of liter) bier dat over is.");
         helpText.add("'/hoeveel' print het aantal liter/euro bier dat in totaal nog over is.");
         helpText.add("'/verbruik [biermerk]' geeft de hoeveelheid bier (optioneel voor biermerk) die je gehad hebt.");
+        helpText.add("'/verbruik van [naam]' geeft de hoeveelheid bier (optioneel voor biermerk) die [naam] gehad hebt.");
+        helpText.add("'/verbruik van iedereen' geeft de hoeveelheid bier (optioneel voor biermerk) die iedereen gehad hebt.");
         helpText.add("'/info biermerk' geeft de inhoud en prijs van een biertje.");
         helpText.add("'/init aantal biermerk inhoud prijs' voegt nieuw bier toe.");
         helpText.add("'/op biermerk' markeert dit bier als op in de biervoorraad. Je kunt hem vanaf dan niet meer turven.");
