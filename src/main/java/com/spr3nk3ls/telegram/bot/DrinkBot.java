@@ -19,6 +19,7 @@ import org.telegram.telegrambots.api.methods.send.SendMessage;
 import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
+import org.telegram.telegrambots.exceptions.TelegramApiRequestException;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -224,7 +225,15 @@ public class DrinkBot extends AbstractBot {
                     userName = user.getFirstName();
                     DrinkUser door = userDao.getDrinkUser(Integer.toString(chatId));
                     if(door != null){
-                        getSender().execute(new SendMessage().setChatId(Long.parseLong(user.getUserId())).setText(door.getFirstName() + " heeft " + amountString + " voor je geturfd."));
+                        try {
+                            getSender().execute(new SendMessage().setChatId(Long.parseLong(user.getUserId())).setText(door.getFirstName() + " heeft " + amountString + " voor je geturfd."));
+                        } catch (TelegramApiRequestException e){
+                            //Request to user failed, reroute to group
+                            Group group = groupIdDao.getGroups().stream().findFirst().orElse(null);
+                            if(group != null) {
+                                getSender().execute(new SendMessage().setChatId(group.getGroupId()).setText(door.getFirstName() + " heeft " + amountString + " voor " + userName + " geturfd."));
+                            }
+                        }
                     }
                 }
             } else {
