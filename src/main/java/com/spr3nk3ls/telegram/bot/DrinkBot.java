@@ -133,7 +133,7 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleInit(Message message){
-        String[] initStringArray = message.getText().split(" ");
+        String[] initStringArray = message.getText().split("\\s+");
         if(initStringArray.length != 5){
             return "Vul in: /init aantal biermerk volume prijs";
         }
@@ -168,11 +168,11 @@ public class DrinkBot extends AbstractBot {
         String voor = null;
         String[] turfStringArray;
         if(message.getText().contains(" voor ")){
-            String[] voorSplit = message.getText().split(" voor ");
-            turfStringArray = voorSplit[0].split(" ");
+            String[] voorSplit = message.getText().split("\\s+voor\\s+");
+            turfStringArray = voorSplit[0].split("\\s+");
             voor = voorSplit[1];
         } else {
-            turfStringArray = message.getText().split(" ");
+            turfStringArray = message.getText().split("\\s+");
         }
         if(turfStringArray.length > 1){
             String brandName = turfStringArray[turfStringArray.length - 1];
@@ -289,13 +289,13 @@ public class DrinkBot extends AbstractBot {
         String[] verbruikArray;
         DrinkUser oneUser = null;
         if(message.getText().contains(" van ")){
-            String[] voorSplit = message.getText().split(" van ");
-            verbruikArray = voorSplit[0].split(" ");
+            String[] voorSplit = message.getText().split("\\s+van\\s+");
+            verbruikArray = voorSplit[0].split("\\s+");
             voor = voorSplit[1];
             final String userName = voor;
             oneUser = getUser(voor);
         } else {
-            verbruikArray = message.getText().split(" ");
+            verbruikArray = message.getText().split("\\s+");
         }
         if(verbruikArray.length == 1){
             List<String> brandArray = new ArrayList<>();
@@ -381,7 +381,7 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleInfo(Message message){
-        String[] info = message.getText().split(" ");
+        String[] info = message.getText().split("\\s+");
         if(info.length == 2) {
             Brand brand = getBrandFromUserInput(info[1]);
             if(brand == null){
@@ -394,7 +394,7 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleOp(Message message) throws TelegramApiException {
-        String[] info = message.getText().split(" ");
+        String[] info = message.getText().split("\\s+");
         if(info.length == 2) {
             Brand brand = getBrandFromUserInput(info[1]);
             if(brand == null){
@@ -432,7 +432,7 @@ public class DrinkBot extends AbstractBot {
     }
 
     private String handleAlias(Message message){
-        String[] aliasArray = message.getText().split(" ");
+        String[] aliasArray = message.getText().split("\\s+");
         if(aliasArray.length == 3) {
             DrinkUser user = getUser(aliasArray[1]);
             if (user == null) {
