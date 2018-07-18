@@ -14,6 +14,8 @@ import com.spr3nk3ls.telegram.domain.Event;
 import com.spr3nk3ls.telegram.domain.Group;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.api.methods.groupadministration.LeaveChat;
+import org.telegram.telegrambots.api.methods.send.SendChatAction;
+import org.telegram.telegrambots.api.methods.send.SendMessage;
 import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
@@ -69,6 +71,9 @@ public class DrinkBot extends AbstractBot {
                 }
                 if(message.getText().startsWith("/op")){
                     return handleOp(message);
+                }
+                if(message.getText().startsWith("/alias")){
+                    return handleAlias(message);
                 }
             } else {
                 return "Ik ken jou niet.";
@@ -158,7 +163,7 @@ public class DrinkBot extends AbstractBot {
         }
     }
 
-    private String handleTurfOrHoeveel(Message message){
+    private String handleTurfOrHoeveel(Message message) throws TelegramApiException {
         String voor = null;
         String[] turfStringArray;
         if(message.getText().contains(" voor ")){
@@ -206,18 +211,21 @@ public class DrinkBot extends AbstractBot {
         return "Ik snap niet wat je bedoelt.";
     }
 
-    private String handleTurf(Integer chatId, String brandName, String voor, Long amount){
+    private String handleTurf(Integer chatId, String brandName, String voor, Long amount) throws TelegramApiException {
         String userId;
         DrinkUser user;
         String userName = "je";
+        String amountString = (amount == 1 ? "een" : amount) + " " + brandName;
         if(voor != null){
-            user = userDao.getDrinkUsers().stream()
-                    .filter(dbUser -> dbUser.getFirstName().equalsIgnoreCase(voor.trim()))
-                    .findFirst().orElse(null);
+            user = getUser(voor);
             if(user != null){
                 userId = user.getUserId();
                 if(!Integer.toString(chatId).equals(userId)) {
                     userName = user.getFirstName();
+                    DrinkUser door = userDao.getDrinkUser(Integer.toString(chatId));
+                    if(door != null){
+                        getSender().execute(new SendMessage().setChatId(Long.parseLong(user.getUserId())).setText(door.getFirstName() + " heeft " + amountString + " voor je geturfd."));
+                    }
                 }
             } else {
                 return "Ik snap niet wie " + voor.trim() + " is.";
@@ -226,7 +234,7 @@ public class DrinkBot extends AbstractBot {
             userId = Integer.toString(chatId);
         }
         eventDao.addEvent(new Event(userId, brandName, -amount));
-        return "Ik heb " + (amount == 1 ? "een" : amount) + " " + brandName + " voor " + userName + " geturfd.";
+        return "Ik heb " + amountString + " voor " + userName + " geturfd.";
     }
 
     private String handleHoeveel(String[] turfStringArray, Brand brand){
@@ -276,9 +284,7 @@ public class DrinkBot extends AbstractBot {
             verbruikArray = voorSplit[0].split(" ");
             voor = voorSplit[1];
             final String userName = voor;
-            oneUser = userDao.getDrinkUsers().stream()
-                    .filter(dbUser -> dbUser.getFirstName().equalsIgnoreCase(userName))
-                    .findFirst().orElse(null);
+            oneUser = getUser(voor);
         } else {
             verbruikArray = message.getText().split(" ");
         }
@@ -378,7 +384,7 @@ public class DrinkBot extends AbstractBot {
         }
     }
 
-    private String handleOp(Message message){
+    private String handleOp(Message message) throws TelegramApiException {
         String[] info = message.getText().split(" ");
         if(info.length == 2) {
             Brand brand = getBrandFromUserInput(info[1]);
@@ -394,7 +400,11 @@ public class DrinkBot extends AbstractBot {
                 output = brand.getBrandName() + " is nu op en kan niet meer geturfd worden.";
             }
             brandDao.addBrand(brand);
-            return output;
+            Group group = groupIdDao.getGroups().stream().findFirst().orElse(null);
+            if(group != null){
+                getSender().execute(new SendMessage().setChatId(group.getGroupId()).setText(output));
+            }
+            return null;
         } else {
             return "Gebruik: /op [biermerk].";
         }
@@ -410,5 +420,62 @@ public class DrinkBot extends AbstractBot {
                     + brandDao.getAllBrands().stream().map(Brand::getBrandName).collect(Collectors.joining("" + ", ")) + ".";
         }
         return "We hebben geen " + beerWeDontHave + ".\n" + weDoHaveMessage;
+    }
+
+    private String handleAlias(Message message){
+        String[] aliasArray = message.getText().split(" ");
+        if(aliasArray.length == 3) {
+            DrinkUser user = getUser(aliasArray[1]);
+            if (user == null) {
+                //TODO format
+                return "Ik ken " + aliasArray[1] + " niet";
+            }
+            DrinkUser aliasUser = getUser(aliasArray[2]);
+            if (aliasUser != null) {
+                if(aliasArray[2].equalsIgnoreCase(aliasUser.getFirstName())){
+                    return "Ik ken al een " + aliasUser.getFirstName() + ".";
+                }
+                return "Ik ken al een " + aliasArray[2] + ", want dat is " + aliasUser.getFirstName() + ".";
+            }
+            List<String> aliases = user.getAliases();
+            if (aliases == null) {
+                aliases = new ArrayList<>();
+            }
+            aliases.add(aliasArray[2]);
+            user.setAliases(aliases);
+            userDao.addDrinkUser(user);
+            //TODO format
+            return "Ik weet nu dat " + user.getFirstName() + " ook " + aliasArray[2] + " heet.";
+        }
+        if(aliasArray.length == 2){
+            DrinkUser aliasUser = getUser(aliasArray[1]);
+            if(aliasUser == null){
+                return "Ik ken " + aliasArray[1] + " niet.";
+            }
+            if(aliasUser.getAliases() == null || aliasUser.getAliases().isEmpty()){
+                return aliasUser.getFirstName() + " heeft nog geen bijnamen.";
+            }
+            return aliasUser.getFirstName() + " heet ook: " + String.join(", ", aliasUser.getAliases()) + ".";
+        }
+        return "Gebruik: /alias [naam] of /alias [naam] [bijnaam]";
+    }
+
+    private DrinkUser getUser(String userNameOrAlias){
+        DrinkUser user = userDao.getDrinkUsers().stream()
+                .filter(dbUser -> dbUser.getFirstName().equalsIgnoreCase(userNameOrAlias.trim()))
+                .findFirst().orElse(null);
+        if(user != null) {
+            return user;
+        }
+        for(DrinkUser someUser : userDao.getDrinkUsers()){
+            if(someUser.getAliases() != null && !someUser.getAliases().isEmpty()){
+                for(String alias : someUser.getAliases()){
+                    if(userNameOrAlias.equalsIgnoreCase(alias)){
+                        return someUser;
+                    }
+                }
+            }
+        }
+        return null;
     }
 }
