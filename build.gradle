@@ -19,7 +19,7 @@ repositories {
 dependencies {
 
     compile 'com.amazonaws:aws-lambda-java-core:1.1.0'
-    compile 'com.amazonaws:aws-java-sdk-dynamodb:1.11.6'
+    compile 'com.amazonaws:aws-java-sdk-dynamodb:1.11.327'
     compile 'com.google.guava:guava:23.0'
     compile 'org.telegram:telegrambots:3.2'
 

@@ -14,7 +14,6 @@ import com.spr3nk3ls.telegram.domain.Event;
 import com.spr3nk3ls.telegram.domain.Group;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.api.methods.groupadministration.LeaveChat;
-import org.telegram.telegrambots.api.methods.send.SendChatAction;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
 import org.telegram.telegrambots.api.objects.ChatMember;
 import org.telegram.telegrambots.api.objects.Message;
@@ -61,9 +60,6 @@ public class DrinkBot extends AbstractBot {
                 if(message.getText().startsWith("/hoofdpijn")){
                     return handleHoofdpijn(message);
                 }
-                if(message.getText().startsWith("/telling")){
-                    //TODO add table with telling
-                }
                 if(message.getText().startsWith("/help")){
                     return handleHelp();
                 }
@@ -75,6 +71,9 @@ public class DrinkBot extends AbstractBot {
                 }
                 if(message.getText().startsWith("/alias")){
                     return handleAlias(message);
+                }
+                if(message.getText().startsWith("/correctie")){
+                    return handleCorrectie(message);
                 }
             } else {
                 return "Ik ken jou niet.";
@@ -157,7 +156,7 @@ public class DrinkBot extends AbstractBot {
                 return "We hebben al een ander bier met de naam " + brandName;
             }
             brandDao.addBrand(newBrand);
-            eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brandName, amount));
+            eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brandName, amount, Event.EventType.INIT));
             return "" + amount + " blikken " + brandName + " toegevoegd.";
         } catch (NumberFormatException e){
             return "Vul in: /init aantal biermerk inhoud prijs. Aantal, volume en prijs moeten een getal zijn.";
@@ -242,11 +241,12 @@ public class DrinkBot extends AbstractBot {
         } else {
             userId = Integer.toString(chatId);
         }
-        eventDao.addEvent(new Event(userId, brandName, -amount));
+        eventDao.addEvent(new Event(userId, brandName, -amount, Event.EventType.TURF));
         return "Ik heb " + amountString + " voor " + userName + " geturfd.";
     }
 
     private String handleHoeveel(String[] turfStringArray, Brand brand){
+      //TODO also note if it is op
         int amountLeft = getAmountLeftForBrand(brand);
         if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
             return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brand.getBrandName());
@@ -325,6 +325,7 @@ public class DrinkBot extends AbstractBot {
 
     private String getVerbruikForBrand(Message message, String brand) {
         Long totalAmount = eventDao.getAllEvents().stream()
+                .filter(event -> !Event.EventType.CORRECTION.equals(event.getEventType()))
                 .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
                 .filter(event -> event.getBrandName().equals(brand))
                 .filter(event -> event.getAmount() < 0)
@@ -335,6 +336,7 @@ public class DrinkBot extends AbstractBot {
 
     private String getVerbruikForBrandAndUser(DrinkUser user, String brand) {
         Long totalAmount = eventDao.getAllEvents().stream()
+                .filter(event -> !Event.EventType.CORRECTION.equals(event.getEventType()))
                 .filter(event -> event.getDrinkerId().equals(user.getUserId()))
                 .filter(event -> event.getBrandName().equals(brand))
                 .filter(event -> event.getAmount() < 0)
@@ -355,6 +357,7 @@ public class DrinkBot extends AbstractBot {
         Calendar fourOClockYesterday = (Calendar)fourOClockToday.clone();
         fourOClockYesterday.add(Calendar.DAY_OF_YEAR, -1);
         Double tooMuchToDrink = eventDao.getAllEvents().stream()
+                .filter(event -> !Event.EventType.CORRECTION.equals(event.getEventType()))
                 .filter(event -> event.getTimestamp() > fourOClockYesterday.getTimeInMillis())
                 .filter(event -> event.getTimestamp() < fourOClockToday.getTimeInMillis())
                 .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
@@ -377,6 +380,7 @@ public class DrinkBot extends AbstractBot {
         helpText.add("'/info biermerk' geeft de inhoud en prijs van een biertje.");
         helpText.add("'/init aantal biermerk inhoud prijs' voegt nieuw bier toe.");
         helpText.add("'/op biermerk' markeert dit bier als op in de biervoorraad. Je kunt hem vanaf dan niet meer turven.");
+        helpText.add("'/correctie biermerk aantal' als bij tellingen blijkt dat de turfjes niet overeenkomen met de vooraad.");
         return String.join("\n", helpText);
     }
 
@@ -467,6 +471,67 @@ public class DrinkBot extends AbstractBot {
             return aliasUser.getFirstName() + " heet ook: " + String.join(", ", aliasUser.getAliases()) + ".";
         }
         return "Gebruik: /alias [naam] of /alias [naam] [bijnaam]";
+    }
+
+    private String handleCorrectie(Message message) throws TelegramApiException {
+        String[] corArray = message.getText().split("\\s+");
+        if(corArray.length == 1){
+            List<String> outputString = new ArrayList<>();
+            boolean noCorrection = eventDao.getAllEvents().stream()
+                    .noneMatch(event -> Event.EventType.CORRECTION.equals(event.getEventType()));
+            if(noCorrection){
+                return "Er is nog niets gecorrigeerd.";
+            }
+            outputString.add("Er is gecorrigeerd voor:");
+            for(Brand brand : brandDao.getAllBrands()){
+                long missing = eventDao.getAllEvents().stream()
+                        .filter(event -> Event.EventType.CORRECTION.equals(event.getEventType()))
+                        .filter(event -> event.getBrandName().equals(brand.getBrandName()))
+                        .mapToLong(event -> -event.getAmount())
+                        .sum();
+                if(missing > 0){
+                    //TODO format
+                    outputString.add(missing + " blikken " + brand.getBrandName());
+                }
+            }
+            return String.join("\n", outputString);
+        }
+        if(corArray.length >= 2) {
+            Brand brand = getBrandFromUserInput(corArray[1]);
+            if (corArray.length == 2) {
+                long missing = eventDao.getAllEvents().stream()
+                        .filter(event -> Event.EventType.CORRECTION.equals(event.getEventType()))
+                        .filter(event -> event.getBrandName().equals(brand.getBrandName()))
+                        .mapToLong(event -> -event.getAmount())
+                        .sum();
+                //TODO format
+                //TODO add events and timestamps
+                return "Er is eerder gecorrigeerd voor " + missing + " ontbrekende blikken " + brand.getBrandName();
+            }
+            if (corArray.length == 3) {
+                try {
+                    Long correction = Long.parseLong(corArray[2]);
+                    Integer oldAmount = getAmountLeftForBrand(brand);
+                    eventDao.addEvent(new Event(Integer.toString(message.getFrom().getId()), brand.getBrandName(), correction - oldAmount, Event.EventType.CORRECTION));
+                    DrinkUser user = userDao.getDrinkUser(Integer.toString(message.getFrom().getId()));
+                    if(user != null){
+                        //TODO format
+                        String output = user.getFirstName() +
+                                " heeft de hoeveelheid " + brand.getBrandName() +
+                                " gecorrigeerd naar " + correction + " blikken.";
+                        Group group = groupIdDao.getGroups().stream().findFirst().orElse(null);
+                        if(group != null){
+                            getSender().execute(new SendMessage().setChatId(group.getGroupId()).setText(output));
+                        }
+                        //TODO format
+                        return "Gecorrigeerd voor " + (oldAmount - correction) + " ontbrekende blikken " + brand.getBrandName() + ".";
+                    }
+                } catch (NumberFormatException e) {
+                    return "De hoeveelheid moet een getal zijn.";
+                }
+            }
+        }
+        return "Gebruik: /correctie [biermerk] [ontbrekende turfjes]";
     }
 
     private DrinkUser getUser(String userNameOrAlias){

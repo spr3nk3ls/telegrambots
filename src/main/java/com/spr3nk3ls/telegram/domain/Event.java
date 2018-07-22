@@ -3,11 +3,16 @@ package com.spr3nk3ls.telegram.domain;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBHashKey;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTypeConvertedEnum;
 
 import java.util.Calendar;
 
 @DynamoDBTable(tableName = "EVENT")
 public class Event {
+
+  public enum EventType {
+    TURF, INIT, CORRECTION;
+  }
 
   @DynamoDBHashKey
   private Long timestamp;
@@ -21,14 +26,18 @@ public class Event {
   @DynamoDBAttribute
   private Long amount;
 
+  @DynamoDBAttribute
+  private String eventType;
+
   public Event(){
   }
 
-  public Event(String drinkerId, String brandName, Long amount){
+  public Event(String drinkerId, String brandName, Long amount, EventType eventType){
     this.timestamp = Calendar.getInstance().getTimeInMillis();
     this.drinkerId = drinkerId;
     this.brandName = brandName;
     this.amount = amount;
+    this.eventType = eventType.name();
   }
 
   public Long getTimestamp() {
@@ -61,5 +70,14 @@ public class Event {
 
   public void setAmount(Long amount) {
     this.amount = amount;
+  }
+
+  public void setEventType(EventType type){
+    this.eventType = type.name();
+  }
+
+  @DynamoDBTypeConvertedEnum
+  public EventType getEventType(){
+    return EventType.valueOf(eventType);
   }
 }
