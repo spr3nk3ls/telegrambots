@@ -245,23 +245,25 @@ public class DrinkBot extends AbstractBot {
         return "Ik heb " + amountString + " voor " + userName + " geturfd.";
     }
 
-    private String handleHoeveel(String[] turfStringArray, Brand brand){
+    private String handleHoeveel(String[] hoeveelArray, Brand brand){
       //TODO also note if it is op
         int amountLeft = getAmountLeftForBrand(brand);
-        if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("liter")){
-            return String.format("Er is nog %.1f liter %s over.", amountLeft*brand.getUnitVolume(), brand.getBrandName());
+        String opString = (brand.isDepleted() != null && brand.isDepleted()) ? " De " + brand.getBrandName() + " is op." : "";
+        if(hoeveelArray.length > 2 && hoeveelArray[1].equalsIgnoreCase("liter")){
+            return String.format("Er is nog %.1f liter %s over.%s", amountLeft*brand.getUnitVolume(), brand.getBrandName(), opString);
         }
-        if(turfStringArray.length > 2 && turfStringArray[1].equalsIgnoreCase("euro")){
-            return String.format("Er is nog %.2f euro %s over.", amountLeft*brand.getUnitPrice(), brand.getBrandName());
+        if(hoeveelArray.length > 2 && hoeveelArray[1].equalsIgnoreCase("euro")){
+            return String.format("Er is nog %.2f euro %s over.%s", amountLeft*brand.getUnitPrice(), brand.getBrandName(), opString);
         }
-        return String.format("Er %s nog %d %s %s over.", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brand.getBrandName());
+        return String.format("Er %s nog %d %s %s over.%s", amountLeft == 1 ? "is" : "zijn", amountLeft, amountLeft == 1 ? "blik" : "blikken", brand.getBrandName(), opString);
     }
 
     private String handleReport(){
         List<String> reportList = new ArrayList<>();
         reportList.add("Dit is er nog over:");
         for(Brand brand : brandDao.getAllBrands()){
-            reportList.add(String.format("%d %s", getAmountLeftForBrand(brand), brand.getBrandName()));
+            String opString = (brand.isDepleted() != null && brand.isDepleted()) ? " (op)" : "";
+            reportList.add(String.format("%d %s%s", getAmountLeftForBrand(brand), brand.getBrandName(), opString));
         }
         reportList.add(getLitersAndEuros());
         return String.join("\n", reportList);
