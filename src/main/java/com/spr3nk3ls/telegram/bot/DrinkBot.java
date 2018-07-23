@@ -8,10 +8,7 @@ import com.spr3nk3ls.telegram.dao.dynamo.DynamoBrandDao;
 import com.spr3nk3ls.telegram.dao.dynamo.DynamoEventDao;
 import com.spr3nk3ls.telegram.dao.dynamo.DynamoGroupDao;
 import com.spr3nk3ls.telegram.dao.dynamo.DynamoUserDao;
-import com.spr3nk3ls.telegram.domain.Brand;
-import com.spr3nk3ls.telegram.domain.DrinkUser;
-import com.spr3nk3ls.telegram.domain.Event;
-import com.spr3nk3ls.telegram.domain.Group;
+import com.spr3nk3ls.telegram.domain.*;
 import org.telegram.telegrambots.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.api.methods.groupadministration.LeaveChat;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
@@ -347,11 +344,6 @@ public class DrinkBot extends AbstractBot {
         return String.format("%s heeft %d %s %s gehad.", user.getFirstName(), totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
     }
 
-    private Brand getBrandFromUserInput(String brandName){
-        return brandDao.getAllBrands().stream()
-                .filter(brand -> brand.getBrandName().equalsIgnoreCase(brandName.trim()))
-                .findFirst().orElse(null);
-    }
 
     private String handleHoofdpijn(Message message){
         Calendar fourOClockToday = Calendar.getInstance();
@@ -437,40 +429,48 @@ public class DrinkBot extends AbstractBot {
         return "We hebben geen " + beerWeDontHave + ".\n" + weDoHaveMessage;
     }
 
-    private String handleAlias(Message message){
+    private String handleAlias(Message message) throws TelegramApiException {
         String[] aliasArray = message.getText().split("\\s+");
-        if(aliasArray.length == 3) {
-            DrinkUser user = getUser(aliasArray[1]);
-            if (user == null) {
+        if(aliasArray.length > 1) {
+            Aliassable userOrBrand = getAliassable(aliasArray[1]);
+            if (userOrBrand == null) {
+                //TODO alias beers.
                 //TODO format
                 return "Ik ken " + aliasArray[1] + " niet";
             }
-            DrinkUser aliasUser = getUser(aliasArray[2]);
-            if (aliasUser != null) {
-                if(aliasArray[2].equalsIgnoreCase(aliasUser.getFirstName())){
-                    return "Ik ken al een " + aliasUser.getFirstName() + ".";
+            if (aliasArray.length == 3) {
+                Aliassable aliasUserOrBrand = getAliassable(aliasArray[2]);
+                if (aliasUserOrBrand != null) {
+                    if (aliasArray[2].equalsIgnoreCase(aliasUserOrBrand.getName())) {
+                        return "Ik ken al een " + aliasUserOrBrand.getName() + ".";
+                    }
+                    return "Ik ken al een " + aliasArray[2] + ", want dat is " + aliasUserOrBrand.getName() + ".";
                 }
-                return "Ik ken al een " + aliasArray[2] + ", want dat is " + aliasUser.getFirstName() + ".";
+                List<String> aliases = userOrBrand.getAliases();
+                if (aliases == null) {
+                    aliases = new ArrayList<>();
+                }
+                aliases.add(aliasArray[2]);
+                userOrBrand.setAliases(aliases);
+                if(userOrBrand instanceof Brand){
+                    brandDao.addBrand((Brand)userOrBrand);
+                } else if (userOrBrand instanceof DrinkUser){
+                    userDao.addDrinkUser((DrinkUser)userOrBrand);
+                } else {
+                    throw new TelegramApiException("The database did not return a user or brand.");
+                }
+                //TODO format
+                return "Ik weet nu dat " + userOrBrand.getName() + " ook " + aliasArray[2] + " heet.";
             }
-            List<String> aliases = user.getAliases();
-            if (aliases == null) {
-                aliases = new ArrayList<>();
+            if (aliasArray.length == 2) {
+                if (userOrBrand.getAliases() == null || userOrBrand.getAliases().isEmpty()) {
+                    return userOrBrand.getName().substring(0,1).toUpperCase()
+                            + userOrBrand.getName().substring(1) + " heeft nog geen bijnamen.";
+                }
+                return userOrBrand.getName().substring(0,1).toUpperCase()
+                        + userOrBrand.getName().substring(1)
+                        + " heet ook: " + String.join(", ", userOrBrand.getAliases()) + ".";
             }
-            aliases.add(aliasArray[2]);
-            user.setAliases(aliases);
-            userDao.addDrinkUser(user);
-            //TODO format
-            return "Ik weet nu dat " + user.getFirstName() + " ook " + aliasArray[2] + " heet.";
-        }
-        if(aliasArray.length == 2){
-            DrinkUser aliasUser = getUser(aliasArray[1]);
-            if(aliasUser == null){
-                return "Ik ken " + aliasArray[1] + " niet.";
-            }
-            if(aliasUser.getAliases() == null || aliasUser.getAliases().isEmpty()){
-                return aliasUser.getFirstName() + " heeft nog geen bijnamen.";
-            }
-            return aliasUser.getFirstName() + " heet ook: " + String.join(", ", aliasUser.getAliases()) + ".";
         }
         return "Gebruik: /alias [naam] of /alias [naam] [bijnaam]";
     }
@@ -542,11 +542,45 @@ public class DrinkBot extends AbstractBot {
         if(user != null) {
             return user;
         }
-        for(DrinkUser someUser : userDao.getDrinkUsers()){
-            if(someUser.getAliases() != null && !someUser.getAliases().isEmpty()){
-                for(String alias : someUser.getAliases()){
-                    if(userNameOrAlias.equalsIgnoreCase(alias)){
-                        return someUser;
+        DrinkUser aliasUser = getAliasFromList(userNameOrAlias, userDao.getDrinkUsers());
+        if(aliasUser != null){
+            return aliasUser;
+        }
+        return null;
+    }
+
+    private Brand getBrandFromUserInput(String brandName){
+        Brand theBrand = brandDao.getAllBrands().stream()
+                .filter(brand -> brand.getBrandName().equalsIgnoreCase(brandName.trim()))
+                .findFirst().orElse(null);
+        if(theBrand != null){
+            return theBrand;
+        }
+        Brand aliasBrand = getAliasFromList(brandName, brandDao.getAllBrands());
+        if(aliasBrand != null){
+            return aliasBrand;
+        }
+        return null;
+    }
+
+    private Aliassable getAliassable(String identifier){
+        Aliassable user = getUser(identifier);
+        if(user != null){
+            return user;
+        }
+        Aliassable brand = getBrandFromUserInput(identifier);
+        if(brand != null){
+            return brand;
+        }
+        return null;
+    }
+
+    private <T extends Aliassable> T getAliasFromList(String identifier, List<T> aliassables){
+        for(T someBrand : aliassables){
+            if(someBrand.getAliases() != null && !someBrand.getAliases().isEmpty()){
+                for(String alias : someBrand.getAliases()){
+                    if(identifier.equalsIgnoreCase(alias)){
+                        return someBrand;
                     }
                 }
             }

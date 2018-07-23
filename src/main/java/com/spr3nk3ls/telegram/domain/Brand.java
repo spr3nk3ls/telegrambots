@@ -2,10 +2,13 @@ package com.spr3nk3ls.telegram.domain;
 
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBHashKey;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIgnore;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
 
+import java.util.List;
+
 @DynamoDBTable(tableName = "BRAND")
-public class Brand {
+public class Brand implements Aliassable {
 
   @DynamoDBHashKey
   private String brandName;
@@ -18,6 +21,9 @@ public class Brand {
 
   @DynamoDBAttribute
   private Boolean depleted;
+
+  @DynamoDBAttribute
+  private List<String> aliases;
 
   public Brand(){
   }
@@ -80,5 +86,21 @@ public class Brand {
 
   public void setDepleted(Boolean depleted){
     this.depleted = depleted;
+  }
+
+  @Override
+  public List<String> getAliases() {
+    return aliases;
+  }
+
+  @Override
+  public void setAliases(List<String> aliases) {
+    this.aliases = aliases;
+  }
+
+  @Override
+  @DynamoDBIgnore
+  public String getName(){
+    return "het bier " + getBrandName();
   }
 }

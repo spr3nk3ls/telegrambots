@@ -6,7 +6,7 @@ import java.io.Serializable;
 import java.util.List;
 
 @DynamoDBTable(tableName = "USER")
-public class DrinkUser implements Serializable {
+public class DrinkUser implements Serializable, Aliassable {
 
     public static final String GROUP_INDEX = "Group-Index";
 
@@ -78,5 +78,10 @@ public class DrinkUser implements Serializable {
         this.aliases = aliases;
     }
 
+    @Override
+    @DynamoDBIgnore
+    public String getName(){
+        return "de drinker " + getFirstName();
+    }
 
 }
