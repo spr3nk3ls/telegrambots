@@ -20,6 +20,7 @@ import org.telegram.telegrambots.exceptions.TelegramApiRequestException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class DrinkBot extends AbstractBot {
@@ -301,13 +302,28 @@ public class DrinkBot extends AbstractBot {
             for(Brand brand : brandDao.getAllBrands()){
                 if("iedereen".equals(voor)){
                     for(DrinkUser user : userDao.getDrinkUsers()){
-                        brandArray.add(getVerbruikForBrandAndUser(user, brand.getBrandName()));
+                        String verbruikString = getVerbruikForBrandAndUser(user, brand.getBrandName());
+                        if(verbruikString != null){
+                            brandArray.add(verbruikString);
+                        }
                     }
                 } else if(oneUser != null){
-                    brandArray.add(getVerbruikForBrandAndUser(oneUser, brand.getBrandName()));
+                    String verbruikString = getVerbruikForBrandAndUser(oneUser, brand.getBrandName());
+                    if(verbruikString != null){
+                        brandArray.add(verbruikString);
+                    }
                 } else {
-                    brandArray.add(getVerbruikForBrand(message, brand.getBrandName()));
+                    String verbruikString = getVerbruikForBrand(message, brand.getBrandName());
+                    if(verbruikString != null){
+                        brandArray.add(verbruikString);
+                    }
                 }
+            }
+            if(brandArray.size() == 0){
+                if(oneUser != null){
+                    return oneUser.getFirstName() + " heeft nog niets geturfd.";
+                }
+                return "Er is nog niets geturfd.";
             }
             return String.join("\n", brandArray);
         }
@@ -316,7 +332,11 @@ public class DrinkBot extends AbstractBot {
             if(brand == null){
                 return weHaveNoMessage(verbruikArray[1]);
             } else {
-                return getVerbruikForBrand(message, brand.getBrandName());
+                String verbruikString = getVerbruikForBrand(message, brand.getBrandName());
+                if(verbruikString == null){
+                    return "Je hebt nog geen " + brand.getBrandName() + " geturfd.";
+                }
+                return verbruikString;
             }
         }
         return "Ik snap het niet.";
@@ -330,6 +350,9 @@ public class DrinkBot extends AbstractBot {
                 .filter(event -> event.getAmount() < 0)
                 .mapToLong(event -> -event.getAmount())
                 .sum();
+        if(totalAmount == 0){
+            return null;
+        }
         return String.format("Je hebt %d %s %s gehad.", totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
     }
 
@@ -341,24 +364,33 @@ public class DrinkBot extends AbstractBot {
                 .filter(event -> event.getAmount() < 0)
                 .mapToLong(event -> -event.getAmount())
                 .sum();
+        if(totalAmount == 0){
+            return null;
+        }
         return String.format("%s heeft %d %s %s gehad.", user.getFirstName(), totalAmount, totalAmount == 1 ? "blik" : "blikken", brand);
     }
 
-
     private String handleHoofdpijn(Message message){
-        Calendar fourOClockToday = Calendar.getInstance();
-        fourOClockToday.set(Calendar.HOUR_OF_DAY, 4);
-        Calendar fourOClockYesterday = (Calendar)fourOClockToday.clone();
-        fourOClockYesterday.add(Calendar.DAY_OF_YEAR, -1);
         Double tooMuchToDrink = eventDao.getAllEvents().stream()
                 .filter(event -> !Event.EventType.CORRECTION.equals(event.getEventType()))
-                .filter(event -> event.getTimestamp() > fourOClockYesterday.getTimeInMillis())
-                .filter(event -> event.getTimestamp() < fourOClockToday.getTimeInMillis())
+                .filter(fromToDaysAgo(0,1))
                 .filter(event -> event.getDrinkerId().equals(Integer.toString(message.getFrom().getId())))
                 .filter(event -> event.getAmount() < 0)
                 .mapToDouble(event -> -event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitVolume())
                 .sum();
         return String.format("Je hebt gisteren %.1f liter bier gedronken.", tooMuchToDrink);
+    }
+
+    private Predicate<? super Event> fromToDaysAgo(int from, int to){
+        return event -> event.getTimestamp() > daysAgo(from) && event.getTimestamp() < daysAgo(to);
+    }
+
+    private long daysAgo(int daysAgo){
+        Calendar fourOClockToday = Calendar.getInstance();
+        fourOClockToday.set(Calendar.HOUR_OF_DAY, 4);
+        Calendar fourOClockYesterday = (Calendar)fourOClockToday.clone();
+        fourOClockYesterday.add(Calendar.DAY_OF_YEAR, daysAgo);
+        return fourOClockYesterday.getTimeInMillis();
     }
 
     private String handleHelp(){
