@@ -250,7 +250,7 @@ public class DrinkBot extends AbstractBot {
         int amountLeft = getAmountLeftForBrand(brand);
         String opString = (brand.isDepleted() != null && brand.isDepleted()) ? " De " + brand.getBrandName() + " is op." : "";
         if(hoeveelArray.length > 2 && hoeveelArray[1].equalsIgnoreCase("liter")){
-            return String.format("Er is nog %.1f liter %s over.%s", amountLeft*brand.getUnitVolume(), brand.getBrandName(), opString);
+            return String.format("Er is nog %.2f liter %s over.%s", amountLeft*brand.getUnitVolume(), brand.getBrandName(), opString);
         }
         if(hoeveelArray.length > 2 && hoeveelArray[1].equalsIgnoreCase("euro")){
             return String.format("Er is nog %.2f euro %s over.%s", amountLeft*brand.getUnitPrice(), brand.getBrandName(), opString);
@@ -283,7 +283,7 @@ public class DrinkBot extends AbstractBot {
         double totalPriceLeft = eventDao.getAllEvents().stream()
                 .mapToDouble(event -> event.getAmount()*brandDao.getBrand(event.getBrandName()).getUnitPrice())
                 .sum();
-        return String.format("Er is in totaal nog %.1f liter (%.2f euro) bier over.", totalAmountLeft, totalPriceLeft);
+        return String.format("Er is in totaal nog %.2f liter (%.2f euro) bier over.", totalAmountLeft, totalPriceLeft);
     }
 
     private String handleVerbruik(Message message){
