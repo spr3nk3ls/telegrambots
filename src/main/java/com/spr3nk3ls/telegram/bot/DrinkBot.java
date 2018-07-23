@@ -311,16 +311,16 @@ public class DrinkBot extends AbstractBot {
         } else {
             verbruikArray = text.split("\\s+");
         }
-        if(verbruikArray.length == 1){
-            Map<String, Predicate<? super Event>> perDayMap = new HashMap<>();
-            if(perDay){
-                for(int i = 8; i >= 0; i--) {
-                    Predicate<? super Event> fromTo = fromToDaysAgo(-i, -i + 1);
-                    perDayMap.put(WEEKDAY_FORMATTER.format(LocalDateTime.now().plusDays(-i)), fromTo);
-                }
-            } else {
-                perDayMap.put("anytime", event -> true);
+        Map<String, Predicate<? super Event>> perDayMap = new HashMap<>();
+        if(perDay){
+            for(int i = 8; i >= 0; i--) {
+                Predicate<? super Event> fromTo = fromToDaysAgo(-i, -i + 1);
+                perDayMap.put(WEEKDAY_FORMATTER.format(LocalDateTime.now().plusDays(-i)), fromTo);
             }
+        } else {
+            perDayMap.put(null, event -> true);
+        }
+        if(verbruikArray.length == 1){
             List<String> brandArray = new ArrayList<>();
             for(Map.Entry<String,Predicate<? super Event>> entry : perDayMap.entrySet()) {
                 for (Brand brand : brandDao.getAllBrands()) {
@@ -357,34 +357,20 @@ public class DrinkBot extends AbstractBot {
             if(brand == null){
                 return weHaveNoMessage(verbruikArray[1]);
             } else {
-                String verbruikString;
-                if(perDay){
-                    verbruikString = getVerbruikForBrandPerDay(message, brand.getBrandName());
-                } else {
-                    verbruikString = getVerbruikForBrand(message, brand.getBrandName(), event -> true, null);
+                List<String> perDayArray = new ArrayList<>();
+                for(Map.Entry<String,Predicate<? super Event>> entry : perDayMap.entrySet()) {
+                    String verbruikString = getVerbruikForBrand(message, brand.getBrandName(), entry.getValue(), entry.getKey());
+                    if(verbruikString != null){
+                        perDayArray.add(verbruikString);
+                    }
                 }
-                if(verbruikString == null){
+                if(perDayArray.isEmpty()){
                     return "Je hebt nog geen " + brand.getBrandName() + " geturfd.";
                 }
-                return verbruikString;
+                return String.join("\n", perDayArray);
             }
         }
         return "Ik snap het niet.";
-    }
-
-    private String getVerbruikForBrandPerDay(Message message, String brand){
-        List<String> perDayArray = new ArrayList<>();
-        for(int i = 8; i >= 0; i--){
-            Predicate<? super Event> fromTo = fromToDaysAgo(-i, -i+1);
-            String verbruikString = getVerbruikForBrand(message, brand, fromTo, WEEKDAY_FORMATTER.format(LocalDateTime.now().plusDays(-i)));
-            if(verbruikString != null){
-                perDayArray.add(verbruikString);
-            }
-        }
-        if(perDayArray.size() > 0){
-            return String.join("\n", perDayArray);
-        }
-        return null;
     }
 
     private String getVerbruikForBrand(Message message, String brand, Predicate<? super Event> timeFilter, String day) {
