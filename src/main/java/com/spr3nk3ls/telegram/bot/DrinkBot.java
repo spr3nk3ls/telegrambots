@@ -479,11 +479,6 @@ public class DrinkBot extends AbstractBot {
         String[] corArray = message.getText().split("\\s+");
         if(corArray.length == 1){
             List<String> outputString = new ArrayList<>();
-            boolean noCorrection = eventDao.getAllEvents().stream()
-                    .noneMatch(event -> Event.EventType.CORRECTION.equals(event.getEventType()));
-            if(noCorrection){
-                return "Er is nog niets gecorrigeerd.";
-            }
             outputString.add("Er is gecorrigeerd voor:");
             for(Brand brand : brandDao.getAllBrands()){
                 long missing = eventDao.getAllEvents().stream()
@@ -492,11 +487,14 @@ public class DrinkBot extends AbstractBot {
                         .mapToLong(event -> -event.getAmount())
                         .sum();
                 if(missing > 0){
-                    //TODO format
                     outputString.add(missing + " blikken " + brand.getBrandName());
                 }
             }
-            return String.join("\n", outputString);
+            if(outputString.size() > 1) {
+                return String.join("\n", outputString);
+            } else {
+                return "Er is nog niets gecorrigeerd.";
+            }
         }
         if(corArray.length >= 2) {
             Brand brand = getBrandFromUserInput(corArray[1]);
@@ -508,7 +506,8 @@ public class DrinkBot extends AbstractBot {
                         .sum();
                 //TODO format
                 //TODO add events and timestamps
-                return "Er is eerder gecorrigeerd voor " + missing + " ontbrekende blikken " + brand.getBrandName();
+                String missingCans = (missing == 1) ? " ontbrekend blik " : " ontbrekende blikken ";
+                return "Er is eerder gecorrigeerd voor " + missing + missingCans + brand.getBrandName();
             }
             if (corArray.length == 3) {
                 try {
