@@ -154,7 +154,7 @@ public class DrinkBot extends AbstractBot {
             }
             Brand oldBrand = brandDao.getBrand(brandName);
             Brand newBrand = new Brand(brandName, volume, price);
-            if(brandDao.getBrand(brandName) != null && !oldBrand.equals(newBrand)){
+            if(getBrandFromUserInput(brandName) != null || (brandDao.getBrand(brandName) != null && !oldBrand.equals(newBrand))){
                 return "We hebben al een ander bier met de naam " + brandName;
             }
             brandDao.addBrand(newBrand);
